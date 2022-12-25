@@ -1,51 +1,55 @@
 package main
 
-//
-// start a worker process, which is implemented
-// in ../mr/worker.go. typically there will be
-// multiple worker processes, talking to one coordinator.
-//
-// go run mrworker.go wc.so
-//
-// Please do not change this file.
-//
+/*
+	start a worker process, which is implemented
+	in ../mr/worker.go. typically there will be
+	multiple worker processes, talking to one coordinator.
 
-import "6.824/mr"
-import "plugin"
-import "os"
-import "fmt"
-import "log"
+	go run mrworker.go wc.so
+
+	Please do not change this file.
+*/
+
+import (
+	. "6.824/logging"
+	"6.824/mr"
+	"fmt"
+	"os"
+	"plugin"
+)
 
 func main() {
 	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: mrworker xxx.so\n")
+		_, err := fmt.Fprintf(os.Stderr, "Usage: mrworker xxx.so\n")
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
-	mapf, reducef := loadPlugin(os.Args[1])
+	mapFunc, reduceFunc := loadPlugin(os.Args[1])
+	Logger.Info(fmt.Sprintf("Loaded map & reduce function from plugin: %s", os.Args[1]))
 
-	mr.Worker(mapf, reducef)
+	mr.Worker(mapFunc, reduceFunc)
 }
 
-//
 // load the application Map and Reduce functions
 // from a plugin file, e.g. ../mrapps/wc.so
-//
 func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
 	p, err := plugin.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot load plugin %v", filename)
+		Logger.Fatal(fmt.Sprintf("cannot load plugin %v. error message: %s", filename, err.Error()))
 	}
-	xmapf, err := p.Lookup("Map")
+	xmapFunc, err := p.Lookup("Map")
 	if err != nil {
-		log.Fatalf("cannot find Map in %v", filename)
+		Logger.Fatal(fmt.Sprintf("cannot find Map in %v", filename))
 	}
-	mapf := xmapf.(func(string, string) []mr.KeyValue)
-	xreducef, err := p.Lookup("Reduce")
+	mapFunc := xmapFunc.(func(string, string) []mr.KeyValue)
+	xreduceFunc, err := p.Lookup("Reduce")
 	if err != nil {
-		log.Fatalf("cannot find Reduce in %v", filename)
+		Logger.Fatal(fmt.Sprintf("cannot find Reduce in %v", filename))
 	}
-	reducef := xreducef.(func(string, []string) string)
+	reduceFunc := xreduceFunc.(func(string, []string) string)
 
-	return mapf, reducef
+	return mapFunc, reduceFunc
 }

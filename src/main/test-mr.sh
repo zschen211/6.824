@@ -47,17 +47,19 @@ rm -f mr-*
 # make sure software is freshly built.
 (cd ../../mrapps && go clean)
 (cd .. && go clean)
-(cd ../../mrapps && go build $RACE -buildmode=plugin wc.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin indexer.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin mtiming.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin rtiming.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin jobcount.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin early_exit.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin crash.go) || exit 1
-(cd ../../mrapps && go build $RACE -buildmode=plugin nocrash.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin wc/wc.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin indexer/indexer.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin mtiming/mtiming.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin rtiming/rtiming.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin jobcount/jobcount.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin early_exit/early_exit.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin crash/crash.go) || exit 1
+(cd ../../mrapps && go build $RACE -buildmode=plugin nocrash/nocrash.go) || exit 1
 (cd .. && go build $RACE mrcoordinator.go) || exit 1
 (cd .. && go build $RACE mrworker.go) || exit 1
 (cd .. && go build $RACE mrsequential.go) || exit 1
+
+echo '*** Finished building all mrapps'
 
 failed_any=0
 
@@ -65,13 +67,13 @@ failed_any=0
 # first word-count
 
 # generate the correct output
-../mrsequential ../../mrapps/wc.so ../pg*txt || exit 1
+../mrsequential ../../mrapps/wc.so ../test/pg*txt || exit 1
 sort mr-out-0 > mr-correct-wc.txt
 rm -f mr-out*
 
 echo '***' Starting wc test.
 
-$TIMEOUT ../mrcoordinator ../pg*txt &
+$TIMEOUT ../mrcoordinator ../test/pg*txt &
 pid=$!
 
 # give the coordinator time to create the sockets.
@@ -105,13 +107,13 @@ wait
 rm -f mr-*
 
 # generate the correct output
-../mrsequential ../../mrapps/indexer.so ../pg*txt || exit 1
+../mrsequential ../../mrapps/indexer.so ../test/pg*txt || exit 1
 sort mr-out-0 > mr-correct-indexer.txt
 rm -f mr-out*
 
 echo '***' Starting indexer test.
 
-$TIMEOUT ../mrcoordinator ../pg*txt &
+$TIMEOUT ../mrcoordinator ../test/pg*txt &
 sleep 1
 
 # start multiple workers
@@ -135,7 +137,7 @@ echo '***' Starting map parallelism test.
 
 rm -f mr-*
 
-$TIMEOUT ../mrcoordinator ../pg*txt &
+$TIMEOUT ../mrcoordinator ../test/pg*txt &
 sleep 1
 
 $TIMEOUT ../mrworker ../../mrapps/mtiming.so &
@@ -166,7 +168,7 @@ echo '***' Starting reduce parallelism test.
 
 rm -f mr-*
 
-$TIMEOUT ../mrcoordinator ../pg*txt &
+$TIMEOUT ../mrcoordinator ../test/pg*txt &
 sleep 1
 
 $TIMEOUT ../mrworker ../../mrapps/rtiming.so &
@@ -189,7 +191,7 @@ echo '***' Starting job count test.
 
 rm -f mr-*
 
-$TIMEOUT ../mrcoordinator ../pg*txt &
+$TIMEOUT ../mrcoordinator ../test/pg*txt &
 sleep 1
 
 $TIMEOUT ../mrworker ../../mrapps/jobcount.so &
@@ -219,7 +221,7 @@ echo '***' Starting early exit test.
 DF=anydone$$
 rm -f $DF
 
-($TIMEOUT ../mrcoordinator ../pg*txt ; touch $DF) &
+($TIMEOUT ../mrcoordinator ../test/pg*txt ; touch $DF) &
 
 # give the coordinator time to create the sockets.
 sleep 1
@@ -271,12 +273,12 @@ rm -f mr-*
 echo '***' Starting crash test.
 
 # generate the correct output
-../mrsequential ../../mrapps/nocrash.so ../pg*txt || exit 1
+../mrsequential ../../mrapps/nocrash.so ../test/pg*txt || exit 1
 sort mr-out-0 > mr-correct-crash.txt
 rm -f mr-out*
 
 rm -f mr-done
-($TIMEOUT ../mrcoordinator ../pg*txt ; touch mr-done ) &
+($TIMEOUT ../mrcoordinator ../test/pg*txt ; touch mr-done ) &
 sleep 1
 
 # start multiple workers

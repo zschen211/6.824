@@ -6,35 +6,46 @@ package main
 // go run mrsequential.go wc.so pg*.txt
 //
 
-import "fmt"
+import (
+	"fmt"
+	"plugin"
+)
 import "6.824/mr"
-import "plugin"
 import "os"
 import "log"
 import "io/ioutil"
 import "sort"
 
-// for sorting by key.
+const (
+	outputFilename = "mr-out-0"
+	mapSymbol      = "Map"
+	reduceSymbol   = "Reduce"
+)
+
+// ByKey for sorting by key.
 type ByKey []mr.KeyValue
 
-// for sorting by key.
+// Len for sorting by key.
 func (a ByKey) Len() int           { return len(a) }
 func (a ByKey) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByKey) Less(i, j int) bool { return a[i].Key < a[j].Key }
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "Usage: mrsequential xxx.so inputfiles...\n")
+		_, err := fmt.Fprintf(os.Stderr, "Usage: mrsequential xxx.so inputfiles...\n")
+		if err != nil {
+			return
+		}
 		os.Exit(1)
 	}
 
-	mapf, reducef := loadPlugin(os.Args[1])
+	mapFunc, reduceFunc := loadPluginSequential(os.Args[1])
 
-	//
-	// read each input file,
-	// pass it to Map,
-	// accumulate the intermediate Map output.
-	//
+	/*
+		read each input file,
+		pass it to Map,
+		accumulate the intermediate Map output.
+	*/
 	intermediate := []mr.KeyValue{}
 	for _, filename := range os.Args[2:] {
 		file, err := os.Open(filename)
@@ -46,65 +57,69 @@ func main() {
 			log.Fatalf("cannot read %v", filename)
 		}
 		file.Close()
-		kva := mapf(filename, string(content))
+		kva := mapFunc(filename, string(content))
 		intermediate = append(intermediate, kva...)
 	}
 
-	//
-	// a big difference from real MapReduce is that all the
-	// intermediate data is in one place, intermediate[],
-	// rather than being partitioned into NxM buckets.
-	//
+	/*
+		a big difference from real MapReduce is that all the
+		intermediate data is in one place, intermediate[],
+		rather than being partitioned into NxM buckets.
+	*/
 
 	sort.Sort(ByKey(intermediate))
 
-	oname := "mr-out-0"
-	ofile, _ := os.Create(oname)
+	outputFile, _ := os.Create(outputFilename)
 
-	//
-	// call Reduce on each distinct key in intermediate[],
-	// and print the result to mr-out-0.
-	//
+	/*
+		call Reduce on each distinct key in intermediate[],
+		and print the result to mr-out-0.
+	*/
 	i := 0
 	for i < len(intermediate) {
 		j := i + 1
 		for j < len(intermediate) && intermediate[j].Key == intermediate[i].Key {
 			j++
 		}
-		values := []string{}
+		var values []string
 		for k := i; k < j; k++ {
 			values = append(values, intermediate[k].Value)
 		}
-		output := reducef(intermediate[i].Key, values)
+		output := reduceFunc(intermediate[i].Key, values)
 
 		// this is the correct format for each line of Reduce output.
-		fmt.Fprintf(ofile, "%v %v\n", intermediate[i].Key, output)
+		_, err := fmt.Fprintf(outputFile, "%v %v\n", intermediate[i].Key, output)
+		if err != nil {
+			return
+		}
 
 		i = j
 	}
 
-	ofile.Close()
+	err := outputFile.Close()
+	if err != nil {
+		return
+	}
 }
 
-//
+// LoadPlugin
 // load the application Map and Reduce functions
 // from a plugin file, e.g. ../mrapps/wc.so
-//
-func loadPlugin(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
+func loadPluginSequential(filename string) (func(string, string) []mr.KeyValue, func(string, []string) string) {
 	p, err := plugin.Open(filename)
 	if err != nil {
-		log.Fatalf("cannot load plugin %v", filename)
+		log.Fatal(fmt.Sprintf("cannot load plugin %v. error message: %s", filename, err.Error()))
 	}
-	xmapf, err := p.Lookup("Map")
+	xmapFunc, err := p.Lookup("Map")
 	if err != nil {
-		log.Fatalf("cannot find Map in %v", filename)
+		log.Fatal(fmt.Sprintf("cannot find Map in %v", filename))
 	}
-	mapf := xmapf.(func(string, string) []mr.KeyValue)
-	xreducef, err := p.Lookup("Reduce")
+	mapFunc := xmapFunc.(func(string, string) []mr.KeyValue)
+	xreduceFunc, err := p.Lookup("Reduce")
 	if err != nil {
-		log.Fatalf("cannot find Reduce in %v", filename)
+		log.Fatal(fmt.Sprintf("cannot find Reduce in %v", filename))
 	}
-	reducef := xreducef.(func(string, []string) string)
+	reduceFunc := xreduceFunc.(func(string, []string) string)
 
-	return mapf, reducef
+	return mapFunc, reduceFunc
 }
